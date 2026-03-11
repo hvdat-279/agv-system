@@ -1,0 +1,105 @@
+<?xml version="1.0"?>
+<robot name="agv"
+    xmlns:xacro="http://www.ros.org/wiki/xacro">
+    <xacro:include filename="materials.urdf.xacro"/>
+    <xacro:include filename="base.urdf.xacro"/>
+    <xacro:include filename="wheels.urdf.xacro"/>
+    <xacro:include filename="arm.urdf.xacro"/>
+    <xacro:include filename="sensors.urdf.xacro"/>
+
+    <!-- Joints for wheels -->
+    <joint name="base_to_left_wheel" type="continuous">
+        <parent link="base_link"/>
+        <child link="left_wheel"/>
+        <origin xyz="-0.15 0.2 0.05" rpy="0 0 0"/>
+        <axis xyz="0 1 0"/>
+    </joint>
+
+    <joint name="base_to_right_wheel" type="continuous">
+        <parent link="base_link"/>
+        <child link="right_wheel"/>
+        <origin xyz="-0.15 -0.2 0.05" rpy="0 0 0"/>
+        <axis xyz="0 1 0"/>
+    </joint>
+
+    <!-- Joints for arm (4-DOF) -->
+    <joint name="base_to_shoulder" type="revolute">
+        <parent link="base_link"/>
+        <child link="shoulder_link"/>
+        <origin xyz="0.2 0 0.1" rpy="0 0 0"/>
+        <axis xyz="0 0 1"/>
+        <limit lower="-1.57" upper="1.57" effort="10" velocity="1"/>
+    </joint>
+
+    <joint name="shoulder_to_upper" type="revolute">
+        <parent link="shoulder_link"/>
+        <child link="upper_arm_link"/>
+        <origin xyz="0 0 0.1" rpy="0 0 0"/>
+        <axis xyz="0 1 0"/>
+        <limit lower="-1.57" upper="1.57" effort="10" velocity="1"/>
+    </joint>
+
+    <joint name="upper_to_forearm" type="revolute">
+        <parent link="upper_arm_link"/>
+        <child link="forearm_link"/>
+        <origin xyz="0 0 0.3" rpy="0 0 0"/>
+        <axis xyz="0 1 0"/>
+        <limit lower="-1.57" upper="1.57" effort="10" velocity="1"/>
+    </joint>
+
+    <joint name="forearm_to_wrist" type="revolute">
+        <parent link="forearm_link"/>
+        <child link="wrist_link"/>
+        <origin xyz="0 0 0.3" rpy="0 0 0"/>
+        <axis xyz="1 0 0"/>
+        <limit lower="-1.57" upper="1.57" effort="5" velocity="1"/>
+    </joint>
+
+    <joint name="wrist_to_gripper" type="fixed">
+        <parent link="wrist_link"/>
+        <child link="gripper_base"/>
+        <origin xyz="0 0 0.1" rpy="0 0 0"/>
+    </joint>
+
+    <joint name="gripper_to_left" type="prismatic">
+        <parent link="gripper_base"/>
+        <child link="gripper_left"/>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <axis xyz="1 0 0"/>
+        <limit lower="-0.04" upper="0.04" effort="5" velocity="0.5"/>
+    </joint>
+
+    <joint name="gripper_to_right" type="prismatic">
+        <parent link="gripper_base"/>
+        <child link="gripper_right"/>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <axis xyz="-1 0 0"/>
+        <limit lower="-0.04" upper="0.04" effort="5" velocity="0.5"/>
+    </joint>
+
+    <!-- Joints for caster wheels -->
+    <joint name="base_to_caster_front" type="fixed">
+        <parent link="base_link"/>
+        <child link="caster_front"/>
+        <origin xyz="0.2 0 -0.04" rpy="0 0 0"/>
+    </joint>
+
+    <joint name="base_to_caster_rear" type="fixed">
+        <parent link="base_link"/>
+        <child link="caster_rear"/>
+        <origin xyz="-0.2 0 -0.04" rpy="0 0 0"/>
+    </joint>
+
+    <!-- Joints for sensors -->
+    <joint name="base_to_lidar" type="fixed">
+        <parent link="base_link"/>
+        <child link="lidar_link"/>
+        <origin xyz="0.2 0 0.15" rpy="0 0 0"/>
+    </joint>
+
+    <joint name="base_to_camera" type="fixed">
+        <parent link="base_link"/>
+        <child link="camera_link"/>
+        <origin xyz="0.25 0 0.1" rpy="0 0 0"/>
+    </joint>
+</robot>
