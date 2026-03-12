@@ -24,7 +24,11 @@ def generate_launch_description():
         gz_resource_path = model_path
 
     urdf_file = os.path.join(pkg_description, 'urdf', 'agv.urdf.xacro')
-    robot_desc = process_file(urdf_file).toxml()
+    controllers_file = os.path.join(pkg_description, 'config', 'controllers.yaml')
+    robot_desc = process_file(
+        urdf_file,
+        mappings={'controller_config': controllers_file},
+    ).toxml()
 
     bridge_config = os.path.join(pkg_gazebo, 'config', 'gazebo_bridge.yaml')
 
@@ -52,8 +56,23 @@ def generate_launch_description():
             executable='robot_state_publisher',
             name='robot_state_publisher',
             output='screen',
+            parameters=[
+                {
+                    'robot_description': robot_desc,
+                    'use_sim_time': True,
+                    'publish_robot_description': True,
+                }
+            ],
+        ),
+
+        Node(
+            package='agv_gazebo',
+            executable='robot_description_publisher.py',
+            name='robot_description_publisher',
+            output='screen',
             parameters=[{'robot_description': robot_desc, 'use_sim_time': True}],
         ),
+
 
         Node(
             package='ros_gz_sim',
@@ -68,5 +87,54 @@ def generate_launch_description():
             name='gz_bridge',
             output='screen',
             parameters=[{'config_file': bridge_config}],
+        ),
+
+        Node(
+            package='controller_manager',
+            executable='spawner',
+            arguments=[
+                'joint_state_broadcaster',
+                '--controller-manager',
+                '/controller_manager',
+                '--param-file',
+                controllers_file,
+            ],
+            output='screen',
+        ),
+        Node(
+            package='controller_manager',
+            executable='spawner',
+            arguments=[
+                'diff_drive_controller',
+                '--controller-manager',
+                '/controller_manager',
+                '--param-file',
+                controllers_file,
+            ],
+            output='screen',
+        ),
+        Node(
+            package='controller_manager',
+            executable='spawner',
+            arguments=[
+                'arm_controller',
+                '--controller-manager',
+                '/controller_manager',
+                '--param-file',
+                controllers_file,
+            ],
+            output='screen',
+        ),
+        Node(
+            package='controller_manager',
+            executable='spawner',
+            arguments=[
+                'gripper_controller',
+                '--controller-manager',
+                '/controller_manager',
+                '--param-file',
+                controllers_file,
+            ],
+            output='screen',
         ),
     ])

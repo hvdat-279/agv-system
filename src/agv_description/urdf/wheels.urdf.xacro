@@ -40,40 +40,44 @@
         </inertial>
     </link>
 
-    <!-- Caster wheels -->
+    <!-- Caster wheels (small rolling wheels) -->
     <link name="caster_front">
         <visual>
             <geometry>
-                <sphere radius="0.04"/>
+                <cylinder radius="0.03" length="0.02"/>
             </geometry>
+            <origin rpy="1.5708 0 0" xyz="0 0 0"/>
             <material name="grey"/>
         </visual>
         <collision>
             <geometry>
-                <sphere radius="0.04"/>
+                <cylinder radius="0.03" length="0.02"/>
             </geometry>
+            <origin rpy="1.5708 0 0" xyz="0 0 0"/>
         </collision>
         <inertial>
             <mass value="0.2"/>
-            <inertia ixx="0.002" ixy="0" ixz="0" iyy="0.002" iyz="0" izz="0.002"/>
+            <inertia ixx="0.001" ixy="0" ixz="0" iyy="0.001" iyz="0" izz="0.001"/>
         </inertial>
     </link>
 
     <link name="caster_rear">
         <visual>
             <geometry>
-                <sphere radius="0.04"/>
+                <cylinder radius="0.03" length="0.02"/>
             </geometry>
+            <origin rpy="1.5708 0 0" xyz="0 0 0"/>
             <material name="grey"/>
         </visual>
         <collision>
             <geometry>
-                <sphere radius="0.04"/>
+                <cylinder radius="0.03" length="0.02"/>
             </geometry>
+            <origin rpy="1.5708 0 0" xyz="0 0 0"/>
         </collision>
         <inertial>
             <mass value="0.2"/>
-            <inertia ixx="0.002" ixy="0" ixz="0" iyy="0.002" iyz="0" izz="0.002"/>
+            <inertia ixx="0.001" ixy="0" ixz="0" iyy="0.001" iyz="0" izz="0.001"/>
         </inertial>
     </link>
 </robot>
