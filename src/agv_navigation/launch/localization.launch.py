@@ -83,6 +83,7 @@ def generate_launch_description() -> LaunchDescription:
             name='controller_server',
             output='screen',
             parameters=[nav2_params],
+            remappings=[('cmd_vel', 'diff_drive_controller/cmd_vel')],
         ),
 
         Node(

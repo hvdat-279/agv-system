@@ -1,5 +1,6 @@
 controller_manager:
   ros__parameters:
+    use_sim_time: true
     update_rate: 50
 
     joint_state_broadcaster:
@@ -16,6 +17,7 @@ controller_manager:
 
 diff_drive_controller:
   ros__parameters:
+    use_sim_time: true
     left_wheel_names: [base_to_left_wheel]
     right_wheel_names: [base_to_right_wheel]
     wheel_separation: 0.4
@@ -29,6 +31,7 @@ diff_drive_controller:
 
 arm_controller:
   ros__parameters:
+    use_sim_time: true
     joints:
       - base_to_shoulder
       - shoulder_to_upper
@@ -42,6 +45,7 @@ arm_controller:
 
 gripper_controller:
   ros__parameters:
+    use_sim_time: true
     joint: gripper_to_left
     action_monitor_rate: 20.0
     goal_tolerance: 0.002

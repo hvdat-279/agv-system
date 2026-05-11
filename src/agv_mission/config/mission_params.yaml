@@ -1,0 +1,20 @@
+mission_controller:
+  ros__parameters:
+    pickup_goal_x: -2.0
+    pickup_goal_y: -2.0
+    pickup_goal_yaw: 0.0
+    
+    red_sort_x: -3.0
+    red_sort_y: -3.0
+    blue_sort_x: -3.0
+    blue_sort_y: 3.0
+    yellow_sort_x: 3.0
+    yellow_sort_y: -3.0
+    
+    home_x: 0.0
+    home_y: 0.0
+    home_yaw: 0.0
+    
+    detect_timeout: 30.0
+    grasp_retries: 3
+    nav_timeout: 60.0

@@ -1,0 +1,8 @@
+class MissionState:
+    IDLE = "IDLE"
+    NAV_TO_PICKUP = "NAV_TO_PICKUP"
+    DETECT = "DETECT"
+    GRASP = "GRASP"
+    NAV_TO_SORT = "NAV_TO_SORT"
+    RELEASE = "RELEASE"
+    RETURN = "RETURN"
