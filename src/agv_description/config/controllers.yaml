@@ -9,11 +9,10 @@ controller_manager:
     diff_drive_controller:
       type: diff_drive_controller/DiffDriveController
 
-    arm_controller:
+    lifter_controller:
       type: joint_trajectory_controller/JointTrajectoryController
 
-    gripper_controller:
-      type: parallel_gripper_action_controller/GripperActionController
+
 
 diff_drive_controller:
   ros__parameters:
@@ -29,26 +28,16 @@ diff_drive_controller:
     enable_odom_tf: true
     use_stamped_vel: false
 
-arm_controller:
+lifter_controller:
   ros__parameters:
     use_sim_time: true
     joints:
-      - base_to_shoulder
-      - shoulder_to_upper
-      - upper_to_forearm
-      - forearm_to_wrist
+      - base_to_fork_lift
     command_interfaces:
       - position
     state_interfaces:
       - position
       - velocity
+    allow_partial_joints_goal: true
 
-gripper_controller:
-  ros__parameters:
-    use_sim_time: true
-    joint: gripper_to_left
-    action_monitor_rate: 20.0
-    goal_tolerance: 0.002
-    max_effort: 5.0
-    stall_velocity_threshold: 0.001
-    stall_timeout: 1.0
+

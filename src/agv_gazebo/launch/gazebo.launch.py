@@ -4,7 +4,7 @@ from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, SetEnvironmentVariable
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration
+from launch.substitutions import LaunchConfiguration, TextSubstitution
 from launch_ros.actions import Node
 from xacro import process_file
 
@@ -48,7 +48,7 @@ def generate_launch_description():
                     'gz_sim.launch.py',
                 )
             ),
-            launch_arguments={'gz_args': ['-r ', world_path]}.items(),
+            launch_arguments={'gz_args': [TextSubstitution(text='-r '), world_path]}.items(),
         ),
 
         Node(
@@ -77,7 +77,11 @@ def generate_launch_description():
         Node(
             package='ros_gz_sim',
             executable='create',
-            arguments=['-name', 'agv', '-topic', 'robot_description', '-x', '0', '-y', '0', '-z', '0.1'],
+            arguments=[
+                '-name', 'agv',
+                '-topic', 'robot_description',
+                '-x', '0', '-y', '0', '-z', '0.1',
+            ],
             output='screen',
         ),
 
@@ -117,7 +121,7 @@ def generate_launch_description():
             package='controller_manager',
             executable='spawner',
             arguments=[
-                'arm_controller',
+                'lifter_controller',
                 '--controller-manager',
                 '/controller_manager',
                 '--param-file',
@@ -125,16 +129,32 @@ def generate_launch_description():
             ],
             output='screen',
         ),
+
+        # Static transforms to bridge Gazebo sensor frame names
+        # to ROS 2 URDF frame names.
+        # Gazebo collapses fixed joints and renames frames to:
+        #   model_name/parent_link/sensor_name
+        # but ROS 2 TF tree uses URDF link names (lidar_link, camera_link).
         Node(
-            package='controller_manager',
-            executable='spawner',
-            arguments=[
-                'gripper_controller',
-                '--controller-manager',
-                '/controller_manager',
-                '--param-file',
-                controllers_file,
-            ],
+            package='tf2_ros',
+            executable='static_transform_publisher',
+            name='lidar_frame_bridge',
             output='screen',
+            arguments=[
+                '--frame-id', 'lidar_link',
+                '--child-frame-id', 'agv/base_link/lidar',
+            ],
+            parameters=[{'use_sim_time': True}],
+        ),
+        Node(
+            package='tf2_ros',
+            executable='static_transform_publisher',
+            name='camera_frame_bridge',
+            output='screen',
+            arguments=[
+                '--frame-id', 'camera_link',
+                '--child-frame-id', 'agv/base_link/camera',
+            ],
+            parameters=[{'use_sim_time': True}],
         ),
     ])

@@ -1,14 +1,14 @@
 mission_controller:
   ros__parameters:
-    pickup_goal_x: -2.0
+    pickup_goal_x: -1.0
     pickup_goal_y: -2.0
-    pickup_goal_yaw: 0.0
+    pickup_goal_yaw: 3.14159
     
-    red_sort_x: -3.0
-    red_sort_y: -3.0
+    red_sort_x: 3.0
+    red_sort_y: 3.0
     blue_sort_x: -3.0
     blue_sort_y: 3.0
-    yellow_sort_x: 3.0
+    yellow_sort_x: 0.0
     yellow_sort_y: -3.0
     
     home_x: 0.0
@@ -18,3 +18,10 @@ mission_controller:
     detect_timeout: 30.0
     grasp_retries: 3
     nav_timeout: 60.0
+    fork_joint_name: base_to_fork_lift
+    fork_tip_frame: fork_tip
+    fork_lift_up: 0.12
+    fork_lift_down: 0.0
+    fork_travel_height: 0.04
+    fork_move_time: 2.0
+    cargo_offset_z: 0.1

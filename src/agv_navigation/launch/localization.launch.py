@@ -49,16 +49,7 @@ def generate_launch_description() -> LaunchDescription:
             executable='ekf_node',
             name='ekf_filter_node',
             output='screen',
-            parameters=[ekf_params],
-        ),
-
-        Node(
-            package='tf2_ros',
-            executable='static_transform_publisher',
-            name='lidar_frame_alias_publisher',
-            output='screen',
-            arguments=['0.2', '0.0', '0.15', '0', '0', '0', 'base_link', 'agv/base_link/lidar'],
-            parameters=[{'use_sim_time': True}],
+            parameters=[ekf_params, {'use_sim_time': True}],
         ),
 
         Node(
@@ -66,7 +57,10 @@ def generate_launch_description() -> LaunchDescription:
             executable='map_server',
             name='map_server',
             output='screen',
-            parameters=[nav2_params, {'yaml_filename': map_file}],
+            parameters=[
+                nav2_params,
+                {'yaml_filename': map_file, 'use_sim_time': True},
+            ],
         ),
 
         Node(
@@ -74,7 +68,7 @@ def generate_launch_description() -> LaunchDescription:
             executable='amcl',
             name='amcl',
             output='screen',
-            parameters=[nav2_params],
+            parameters=[nav2_params, {'use_sim_time': True}],
         ),
 
         Node(
@@ -82,7 +76,7 @@ def generate_launch_description() -> LaunchDescription:
             executable='controller_server',
             name='controller_server',
             output='screen',
-            parameters=[nav2_params],
+            parameters=[nav2_params, {'use_sim_time': True}],
             remappings=[('cmd_vel', 'diff_drive_controller/cmd_vel')],
         ),
 
@@ -91,7 +85,7 @@ def generate_launch_description() -> LaunchDescription:
             executable='planner_server',
             name='planner_server',
             output='screen',
-            parameters=[nav2_params],
+            parameters=[nav2_params, {'use_sim_time': True}],
         ),
 
         Node(
@@ -99,7 +93,7 @@ def generate_launch_description() -> LaunchDescription:
             executable='behavior_server',
             name='behavior_server',
             output='screen',
-            parameters=[nav2_params],
+            parameters=[nav2_params, {'use_sim_time': True}],
         ),
 
         Node(
@@ -107,7 +101,7 @@ def generate_launch_description() -> LaunchDescription:
             executable='bt_navigator',
             name='bt_navigator',
             output='screen',
-            parameters=[nav2_params],
+            parameters=[nav2_params, {'use_sim_time': True}],
         ),
 
         Node(
@@ -115,7 +109,10 @@ def generate_launch_description() -> LaunchDescription:
             executable='lifecycle_manager',
             name='lifecycle_manager_localization',
             output='screen',
-            parameters=[nav2_params],
+            parameters=[
+                nav2_params,
+                {'use_sim_time': True, 'autostart': True},
+            ],
         ),
 
         Node(
@@ -123,7 +120,10 @@ def generate_launch_description() -> LaunchDescription:
             executable='lifecycle_manager',
             name='lifecycle_manager_navigation',
             output='screen',
-            parameters=[nav2_params],
+            parameters=[
+                nav2_params,
+                {'use_sim_time': True, 'autostart': True},
+            ],
         ),
 
         Node(

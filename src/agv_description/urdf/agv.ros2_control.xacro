@@ -17,36 +17,13 @@
                 <state_interface name="velocity"/>
             </joint>
 
-            <joint name="base_to_shoulder">
-                <command_interface name="position"/>
-                <state_interface name="position"/>
-                <state_interface name="velocity"/>
-            </joint>
-            <joint name="shoulder_to_upper">
-                <command_interface name="position"/>
-                <state_interface name="position"/>
-                <state_interface name="velocity"/>
-            </joint>
-            <joint name="upper_to_forearm">
-                <command_interface name="position"/>
-                <state_interface name="position"/>
-                <state_interface name="velocity"/>
-            </joint>
-            <joint name="forearm_to_wrist">
+            <joint name="base_to_fork_lift">
                 <command_interface name="position"/>
                 <state_interface name="position"/>
                 <state_interface name="velocity"/>
             </joint>
 
-            <joint name="gripper_to_left">
-                <command_interface name="position"/>
-                <state_interface name="position"/>
-                <state_interface name="velocity"/>
-            </joint>
-            <joint name="gripper_to_right">
-                <state_interface name="position"/>
-                <state_interface name="velocity"/>
-            </joint>
+
         </ros2_control>
 
         <gazebo>

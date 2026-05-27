@@ -7,7 +7,8 @@ ekf_filter_node:
     transform_time_offset: 0.0
     transform_timeout: 0.2
     print_diagnostics: true
-    publish_tf: true
+    publish_tf: false
+    publish_acceleration: false
 
     map_frame: map
     odom_frame: odom
@@ -24,3 +25,4 @@ ekf_filter_node:
     odom0_nodelay: false
     odom0_differential: false
     odom0_relative: false
+

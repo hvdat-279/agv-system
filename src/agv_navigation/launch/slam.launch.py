@@ -3,6 +3,7 @@ import os
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
+from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 from xacro import process_file
@@ -18,6 +19,7 @@ def generate_launch_description() -> LaunchDescription:
     slam_params = LaunchConfiguration('slam_params_file')
     ekf_params = LaunchConfiguration('ekf_params_file')
     rviz_config = LaunchConfiguration('rviz_config_file')
+    use_robot_state_publisher = LaunchConfiguration('use_robot_state_publisher')
 
     return LaunchDescription([
         DeclareLaunchArgument(
@@ -35,6 +37,11 @@ def generate_launch_description() -> LaunchDescription:
             default_value=os.path.join(pkg_nav, 'rviz', 'nav2.rviz'),
             description='Path to RViz config file',
         ),
+        DeclareLaunchArgument(
+            'use_robot_state_publisher',
+            default_value='false',
+            description='Start robot_state_publisher (set true when running without Gazebo)',
+        ),
 
         Node(
             package='robot_state_publisher',
@@ -42,6 +49,7 @@ def generate_launch_description() -> LaunchDescription:
             name='robot_state_publisher',
             output='screen',
             parameters=[{'robot_description': robot_desc, 'use_sim_time': True}],
+            condition=IfCondition(use_robot_state_publisher),
         ),
 
         Node(
@@ -50,15 +58,6 @@ def generate_launch_description() -> LaunchDescription:
             name='ekf_filter_node',
             output='screen',
             parameters=[ekf_params],
-        ),
-
-        Node(
-            package='tf2_ros',
-            executable='static_transform_publisher',
-            name='lidar_frame_alias_publisher',
-            output='screen',
-            arguments=['0.2', '0.0', '0.15', '0', '0', '0', 'base_link', 'agv/base_link/lidar'],
-            parameters=[{'use_sim_time': True}],
         ),
 
         Node(

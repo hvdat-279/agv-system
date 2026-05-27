@@ -12,6 +12,7 @@
   <depend>geometry_msgs</depend>
   <depend>nav2_msgs</depend>
   <depend>agv_interfaces</depend>
+  <depend>tf2_ros</depend>
   <depend>control_msgs</depend>
   <depend>trajectory_msgs</depend>
 
