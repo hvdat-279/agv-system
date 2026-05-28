@@ -10,6 +10,7 @@ import rclpy
 from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
 from sensor_msgs.msg import Image
+from std_msgs.msg import String
 import yaml
 
 
@@ -35,6 +36,7 @@ class ColorDetector(Node):
         self.declare_parameter('area_min', 500.0)
         self.declare_parameter('process_every_n', 3)
         self.declare_parameter('debug_view', False)
+        self.declare_parameter('publish_annotated', True)
         self.declare_parameter('object_width_m', 0.2)
         self.declare_parameter('focal_length_px', 550.0)
         self.declare_parameter('angle_per_pixel', 0.002)
@@ -42,6 +44,12 @@ class ColorDetector(Node):
         self.bridge = CvBridge()
         self.frame_count = 0
         self.ranges = self._load_color_ranges()
+
+        # Trạng thái FSM từ mission controller
+        self._mission_state = 'IDLE'
+        self._state_sub = self.create_subscription(
+            String, '/mission_state', self._state_callback, 10
+        )
 
         image_topic = self.get_parameter('image_topic').get_parameter_value().string_value
         self.subscription = self.create_subscription(
@@ -51,8 +59,15 @@ class ColorDetector(Node):
             qos_profile_sensor_data,
         )
         self.publisher = self.create_publisher(DetectedCargo, '/detected_cargo', 10)
+        self.annotated_pub = self.create_publisher(
+            Image, '/camera/detection_view', 10
+        )
 
         self.get_logger().info(f'Color detector listening on {image_topic}')
+        self.get_logger().info('Publishing annotated view on /camera/detection_view')
+
+    def _state_callback(self, msg: String) -> None:
+        self._mission_state = msg.data
 
     def _load_color_ranges(self) -> Dict[str, List[Dict[str, int]]]:
         config_param = self.get_parameter('config_file').get_parameter_value().string_value
@@ -97,6 +112,7 @@ class ColorDetector(Node):
         if best is None:
             detected_msg.detected = False
             self.publisher.publish(detected_msg)
+            self._publish_annotated(bgr_image, None, None, None)
             self._debug_view(bgr_image, None, None, None)
             return
 
@@ -134,7 +150,9 @@ class ColorDetector(Node):
             'distance': distance,
             'angle': angle,
             'center': (center_x, center_y),
+            'width': float(w),
         }
+        self._publish_annotated(bgr_image, bbox, info, best_mask)
         self._debug_view(bgr_image, bbox, info, best_mask)
 
     def _find_best_contour(
@@ -194,6 +212,126 @@ class ColorDetector(Node):
 
         x, y, w, h = cv2.boundingRect(best_contour)
         return best_color, best_contour, (x, y, w, h), best_mask
+
+    # Màu BGR cho từng loại cargo
+    _COLOR_BGR = {
+        'red':    (0,   0,   220),
+        'blue':   (220, 80,  0),
+        'yellow': (0,   210, 210),
+    }
+    # Màu nền panel cho từng trạng thái FSM
+    _STATE_BG = {
+        'IDLE':           (60,  60,  60),
+        'NAV_TO_PICKUP':  (180, 100, 0),
+        'DETECT_COLOR':   (0,   160, 160),
+        'APPROACH_CARGO': (0,   140, 200),
+        'LOAD_CARGO':     (0,   180, 60),
+        'RETREAT_PICKUP': (0,   120, 180),
+        'NAV_TO_SORT':    (160, 80,  0),
+        'APPROACH_SORT':  (0,   140, 200),
+        'UNLOAD_CARGO':   (200, 60,  0),
+        'RETREAT_SORT':   (0,   120, 180),
+        'RETURN':         (100, 60,  180),
+    }
+
+    def _publish_annotated(
+        self, bgr_image: np.ndarray, bbox, info, mask
+    ) -> None:
+        publish_annotated = (
+            self.get_parameter('publish_annotated').get_parameter_value().bool_value
+        )
+        if not publish_annotated:
+            return
+
+        h_img, w_img = bgr_image.shape[:2]
+        display = bgr_image.copy()
+
+        # --- Vẽ đường tâm dọc (crosshair dọc) ---
+        cx = w_img // 2
+        cv2.line(display, (cx, 0), (cx, h_img), (200, 200, 200), 1, cv2.LINE_AA)
+
+        if bbox is not None and info is not None:
+            x, y, w, h = bbox
+            color_name = info['color']
+            bgr = self._COLOR_BGR.get(color_name, (0, 255, 0))
+
+            # Bounding box dày
+            cv2.rectangle(display, (x, y), (x + w, y + h), bgr, 3)
+
+            # Vẽ contour tâm
+            cx_obj = int(x + w / 2)
+            cy_obj = int(y + h / 2)
+            cv2.circle(display, (cx_obj, cy_obj), 5, bgr, -1)
+
+            # Đường từ tâm ảnh đến tâm object (góc lệch)
+            cv2.line(
+                display,
+                (cx, h_img // 2),
+                (cx_obj, cy_obj),
+                (200, 200, 200), 1, cv2.LINE_AA
+            )
+
+            # Label nổi trên bbox
+            label = f"{color_name.upper()}  {info['distance']:.2f}m"
+            (tw, th), _ = cv2.getTextSize(
+                label, cv2.FONT_HERSHEY_SIMPLEX, 0.65, 2
+            )
+            lx = max(x, 0)
+            ly = max(y - 10, th + 4)
+            cv2.rectangle(
+                display, (lx, ly - th - 4), (lx + tw + 6, ly + 2), bgr, -1
+            )
+            cv2.putText(
+                display, label, (lx + 3, ly - 2),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.65, (255, 255, 255), 2, cv2.LINE_AA
+            )
+
+            # Sub-label: angle + pixel width
+            sub = f"angle={info['angle']:.3f} rad  w={info['width']:.0f}px"
+            cv2.putText(
+                display, sub, (x, y + h + 18),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.48, bgr, 1, cv2.LINE_AA
+            )
+
+        # --- Panel thông tin phía dưới ---
+        panel_h = 54
+        panel = np.zeros((panel_h, w_img, 3), dtype=np.uint8)
+        state = self._mission_state
+        state_bg = self._STATE_BG.get(state, (60, 60, 60))
+        panel[:] = state_bg
+
+        # Trạng thái FSM
+        cv2.putText(
+            panel, f'FSM: {state}',
+            (8, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2, cv2.LINE_AA
+        )
+
+        # Thông tin detect
+        if info is not None:
+            det_txt = (
+                f"Detected: {info['color'].upper()}  "
+                f"dist={info['distance']:.2f}m  "
+                f"angle={info['angle']:.3f}rad"
+            )
+            det_color = self._COLOR_BGR.get(info['color'], (255, 255, 255))
+        else:
+            det_txt = 'Detected: --- (scanning...)'
+            det_color = (160, 160, 160)
+
+        cv2.putText(
+            panel, det_txt,
+            (8, 44), cv2.FONT_HERSHEY_SIMPLEX, 0.52, det_color, 1, cv2.LINE_AA
+        )
+
+        # Ghép panel vào ảnh
+        combined = np.vstack([display, panel])
+
+        # Publish
+        try:
+            ros_img = self.bridge.cv2_to_imgmsg(combined, encoding='bgr8')
+            self.annotated_pub.publish(ros_img)
+        except Exception as exc:
+            self.get_logger().error(f'Failed to publish annotated image: {exc}')
 
     def _debug_view(self, bgr_image: np.ndarray, bbox, info, mask) -> None:
         debug_view = self.get_parameter('debug_view').get_parameter_value().bool_value

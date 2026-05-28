@@ -1,10 +1,12 @@
+import math
+
 from control_msgs.action import FollowJointTrajectory
-from geometry_msgs.msg import Pose
+from geometry_msgs.msg import Pose, TwistStamped
 import rclpy
 from rclpy.action import ActionClient
 from rclpy.duration import Duration
 from rclpy.node import Node
-from std_msgs.msg import Empty
+from std_msgs.msg import Empty, String
 import tf2_ros
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 
@@ -57,6 +59,14 @@ class MissionController(Node):
             ),
         }
         self.carried_color = None
+        self.teleport_process = None
+
+        self.cmd_vel_pub = self.create_publisher(
+            TwistStamped, '/diff_drive_controller/cmd_vel', 10
+        )
+        self.state_pub = self.create_publisher(
+            String, '/mission_state', 10
+        )
 
         # Clients
         self.nav2_client = Nav2Client(self)
@@ -78,6 +88,9 @@ class MissionController(Node):
         self.fork_goal_done = True
         self.fork_goal_success = False
         self.fork_step = 0
+        self.x_start = 0.0
+        self.y_start = 0.0
+        self.teleport_counter = 0
 
         # Start command
         self.start_sub = self.create_subscription(
@@ -87,9 +100,16 @@ class MissionController(Node):
 
         # FSM Timer
         self.timer = self.create_timer(0.1, self.run_fsm)
+        # Publish state timer (10 Hz) để perception luôn biết trạng thái
+        self.state_timer = self.create_timer(0.1, self._publish_current_state)
         self.get_logger().info(
             'Mission Controller Initialized. Waiting for /start_mission'
         )
+
+    def _publish_current_state(self):
+        msg = String()
+        msg.data = self.current_state
+        self.state_pub.publish(msg)
 
     def start_callback(self, msg):
         self.get_logger().info('Received start mission command!')
@@ -99,6 +119,9 @@ class MissionController(Node):
         self.current_state = new_state
         self.state_initialized = False
         self.get_logger().info(f'Transitioned to: {new_state}')
+        msg = String()
+        msg.data = new_state
+        self.state_pub.publish(msg)
 
     def _now(self):
         return self.get_clock().now()
@@ -108,9 +131,35 @@ class MissionController(Node):
             return 0.0
         return (self._now() - start_time).nanoseconds / 1e9
 
+    def drive(self, vx, wz):
+        msg = TwistStamped()
+        msg.header.stamp = self._now().to_msg()
+        msg.header.frame_id = 'base_link'
+        msg.twist.linear.x = float(vx)
+        msg.twist.angular.z = float(wz)
+        self.cmd_vel_pub.publish(msg)
+
+    def get_robot_pose(self):
+        try:
+            t = self.tf_buffer.lookup_transform(
+                'map', 'base_link', rclpy.time.Time()
+            )
+            x = t.transform.translation.x
+            y = t.transform.translation.y
+            q = t.transform.rotation
+            siny_cosp = 2 * (q.w * q.z + q.x * q.y)
+            cosy_cosp = 1 - 2 * (q.y * q.y + q.z * q.z)
+            yaw = math.atan2(siny_cosp, cosy_cosp)
+            return x, y, yaw
+        except Exception as e:
+            self.get_logger().debug(f'TF lookup failed in get_robot_pose: {e}')
+            return None
+
     def run_fsm(self):
         if self.carried_color and self.carried_color in self.cargo_pubs:
-            self.publish_cargo_at_fork(self.carried_color)
+            self.teleport_counter += 1
+            if self.teleport_counter % 3 == 0:
+                self.publish_cargo_at_fork(self.carried_color)
 
         if self.current_state == MissionState.IDLE:
             self.handle_idle()
@@ -118,12 +167,20 @@ class MissionController(Node):
             self.handle_nav_to_pickup()
         elif self.current_state == MissionState.DETECT_COLOR:
             self.handle_detect_color()
+        elif self.current_state == MissionState.APPROACH_CARGO:
+            self.handle_approach_cargo()
         elif self.current_state == MissionState.LOAD_CARGO:
             self.handle_load_cargo()
+        elif self.current_state == MissionState.RETREAT_PICKUP:
+            self.handle_retreat_pickup()
         elif self.current_state == MissionState.NAV_TO_SORT:
             self.handle_nav_to_sort()
+        elif self.current_state == MissionState.APPROACH_SORT:
+            self.handle_approach_sort()
         elif self.current_state == MissionState.UNLOAD_CARGO:
             self.handle_unload_cargo()
+        elif self.current_state == MissionState.RETREAT_SORT:
+            self.handle_retreat_sort()
         elif self.current_state == MissionState.RETURN:
             self.handle_return()
 
@@ -165,66 +222,157 @@ class MissionController(Node):
                 f'Found {cargo.color} cargo at dist: {cargo.distance}'
             )
             self.detected_color = cargo.color
-            self.transition_to(MissionState.LOAD_CARGO)
+            self.transition_to(MissionState.APPROACH_CARGO)
+
+    def handle_approach_cargo(self):
+        if not self.state_initialized:
+            self.fork_step = 0
+            self.action_start_time = self._now()
+            self.state_initialized = True
+            pose = self.get_robot_pose()
+            if pose is not None:
+                self.x_start, self.y_start, _ = pose
+            else:
+                self.x_start, self.y_start = -1.0, -2.0
+            self.get_logger().info('Approaching cargo shelf...')
+
+        # Step 0: lower the fork to lift height (0.0)
+        if self.fork_step == 0:
+            if self.send_fork_goal(self.get_parameter('fork_lift_down').value):
+                self.fork_step = 1
+        elif self.fork_step == 1:
+            if self.fork_goal_done:
+                if not self.fork_goal_success:
+                    self.get_logger().error('Fork lower failed during approach. Aborting.')
+                    self.transition_to(MissionState.IDLE)
+                    return
+                # Start driving forward
+                self.fork_step = 2
+                self.action_start_time = self._now()  # Reset timer for the drive phase
+        elif self.fork_step == 2:
+            pose = self.get_robot_pose()
+            dist = 0.0
+            if pose is not None:
+                x, y, _ = pose
+                dist = ((x - self.x_start)**2 + (y - self.y_start)**2)**0.5
+
+            elapsed = self._elapsed(self.action_start_time)
+            # Stop after 0.38 meters of travel or 8.0 seconds timeout
+            if dist >= 0.38 or elapsed > 8.0:
+                self.drive(0.0, 0.0)  # Stop
+                self.transition_to(MissionState.LOAD_CARGO)
+            else:
+                self.drive(0.08, 0.0)  # Drive forward slowly (local +x)
 
     def handle_load_cargo(self):
         if not self.state_initialized:
             self.fork_step = 0
             self.state_initialized = True
             self.get_logger().info('Loading cargo with forklift...')
+            self.carried_color = self.detected_color
 
         if self.fork_step == 0:
-            if self.send_fork_goal(
-                self.get_parameter('fork_lift_down').value
-            ):
+            if self.send_fork_goal(self.get_parameter('fork_lift_up').value):
                 self.fork_step = 1
         elif self.fork_step == 1:
             if self.fork_goal_done:
-                if not self.fork_goal_success:
-                    self.get_logger().error(
-                        'Fork lower failed. Aborting load.'
-                    )
-                    self.transition_to(MissionState.IDLE)
-                    return
-                if self.send_fork_goal(
-                    self.get_parameter('fork_lift_up').value
-                ):
-                    self.fork_step = 2
-        elif self.fork_step == 2:
-            if self.fork_goal_done:
                 if self.fork_goal_success:
                     self.get_logger().info('Loading complete!')
-                    self.carried_color = self.detected_color
-                    self.transition_to(MissionState.NAV_TO_SORT)
+                    self.transition_to(MissionState.RETREAT_PICKUP)
                 else:
-                    self.get_logger().error(
-                        'Fork lift failed. Aborting load.'
-                    )
+                    self.get_logger().error('Fork lift failed. Aborting load.')
                     self.transition_to(MissionState.IDLE)
+
+    def handle_retreat_pickup(self):
+        if not self.state_initialized:
+            self.action_start_time = self._now()
+            self.state_initialized = True
+            pose = self.get_robot_pose()
+            if pose is not None:
+                self.x_start, self.y_start, _ = pose
+            else:
+                self.x_start, self.y_start = -1.45, -2.0
+            self.get_logger().info('Retreating from shelf...')
+
+        pose = self.get_robot_pose()
+        dist = 0.0
+        if pose is not None:
+            x, y, _ = pose
+            dist = ((x - self.x_start)**2 + (y - self.y_start)**2)**0.5
+
+        elapsed = self._elapsed(self.action_start_time)
+        # Drive back 0.42m or timeout
+        if dist >= 0.42 or elapsed > 8.0:
+            self.drive(0.0, 0.0)  # Stop
+            # Lower the fork slightly to travel height for safety during transport
+            self.send_fork_goal(self.get_parameter('fork_travel_height').value)
+            self.transition_to(MissionState.NAV_TO_SORT)
+        else:
+            self.drive(-0.08, 0.0)  # Drive backward (local -x)
 
     def handle_nav_to_sort(self):
         if not self.state_initialized:
             if self.detected_color == 'red':
-                x = self.get_parameter('red_sort_x').value
-                y = self.get_parameter('red_sort_y').value
+                x_sort = self.get_parameter('red_sort_x').value
+                y_sort = self.get_parameter('red_sort_y').value
+                # Red station is on the right (+x), approach from left, face east
+                goal_x = x_sort - 1.0
+                goal_y = y_sort
+                goal_yaw = 0.0
             elif self.detected_color == 'blue':
-                x = self.get_parameter('blue_sort_x').value
-                y = self.get_parameter('blue_sort_y').value
+                x_sort = self.get_parameter('blue_sort_x').value
+                y_sort = self.get_parameter('blue_sort_y').value
+                # Blue station is on the left (-x), approach from right, face west
+                goal_x = x_sort + 1.0
+                goal_y = y_sort
+                goal_yaw = 3.14159
             else:  # yellow or unknown
-                x = self.get_parameter('yellow_sort_x').value
-                y = self.get_parameter('yellow_sort_y').value
+                x_sort = self.get_parameter('yellow_sort_x').value
+                y_sort = self.get_parameter('yellow_sort_y').value
+                # Yellow station is at the bottom (-y), approach from top, face south
+                goal_x = x_sort
+                goal_y = y_sort + 1.0
+                goal_yaw = -1.5708
 
-            self.nav2_client.send_goal(x, y, 0.0)
+            self.nav2_client.send_goal(goal_x, goal_y, goal_yaw)
             self.state_initialized = True
 
         if self.nav2_client.goal_done:
             if self.nav2_client.goal_success:
-                self.transition_to(MissionState.UNLOAD_CARGO)
+                self.transition_to(MissionState.APPROACH_SORT)
             else:
-                self.get_logger().error(
-                    'Failed to navigate to sort station!'
-                )
+                self.get_logger().error('Failed to navigate to sort station!')
                 self.transition_to(MissionState.IDLE)
+
+    def handle_approach_sort(self):
+        if not self.state_initialized:
+            self.action_start_time = self._now()
+            self.state_initialized = True
+            pose = self.get_robot_pose()
+            if pose is not None:
+                self.x_start, self.y_start, _ = pose
+            else:
+                if self.detected_color == 'red':
+                    self.x_start, self.y_start = 2.0, 3.0
+                elif self.detected_color == 'blue':
+                    self.x_start, self.y_start = -2.0, 3.0
+                else:
+                    self.x_start, self.y_start = 0.0, -2.0
+            self.get_logger().info('Approaching sorting station...')
+
+        pose = self.get_robot_pose()
+        dist = 0.0
+        if pose is not None:
+            x, y, _ = pose
+            dist = ((x - self.x_start)**2 + (y - self.y_start)**2)**0.5
+
+        elapsed = self._elapsed(self.action_start_time)
+        # Drive forward 0.30m to overlap forks with the sorting table
+        if dist >= 0.30 or elapsed > 8.0:
+            self.drive(0.0, 0.0)
+            self.transition_to(MissionState.UNLOAD_CARGO)
+        else:
+            self.drive(0.08, 0.0)
 
     def handle_unload_cargo(self):
         if not self.state_initialized:
@@ -233,34 +381,73 @@ class MissionController(Node):
             self.get_logger().info('Unloading cargo with forklift...')
 
         if self.fork_step == 0:
-            if self.send_fork_goal(
-                self.get_parameter('fork_lift_down').value
-            ):
+            if self.send_fork_goal(self.get_parameter('fork_lift_down').value):
                 self.fork_step = 1
         elif self.fork_step == 1:
             if self.fork_goal_done:
                 if not self.fork_goal_success:
-                    self.get_logger().error(
-                        'Fork lower failed. Aborting unload.'
-                    )
+                    self.get_logger().error('Fork lower failed. Aborting unload.')
                     self.transition_to(MissionState.IDLE)
                     return
+                # Detach the cargo physically in Gazebo
                 self.drop_cargo()
-                if self.send_fork_goal(
-                    self.get_parameter('fork_travel_height').value
-                ):
+                self.carried_color = None
+                # Lift the forks slightly to clear the table
+                if self.send_fork_goal(self.get_parameter('fork_travel_height').value):
                     self.fork_step = 2
         elif self.fork_step == 2:
             if self.fork_goal_done:
                 if self.fork_goal_success:
                     self.get_logger().info('Unloading complete!')
-                    self.carried_color = None
-                    self.transition_to(MissionState.RETURN)
+                    self.transition_to(MissionState.RETREAT_SORT)
                 else:
-                    self.get_logger().error(
-                        'Fork raise failed after unload.'
-                    )
+                    self.get_logger().error('Fork raise failed after unload.')
                     self.transition_to(MissionState.IDLE)
+
+    def handle_retreat_sort(self):
+        if not self.state_initialized:
+            self.action_start_time = self._now()
+            self.state_initialized = True
+            pose = self.get_robot_pose()
+            if pose is not None:
+                self.x_start, self.y_start, _ = pose
+            else:
+                if self.detected_color == 'red':
+                    self.x_start, self.y_start = 2.3, 3.0
+                elif self.detected_color == 'blue':
+                    self.x_start, self.y_start = -2.3, 3.0
+                else:
+                    self.x_start, self.y_start = 0.0, -2.3
+            self.get_logger().info('Retreating from sorting station...')
+
+        pose = self.get_robot_pose()
+        dist = 0.0
+        if pose is not None:
+            x, y, _ = pose
+            dist = ((x - self.x_start)**2 + (y - self.y_start)**2)**0.5
+
+        elapsed = self._elapsed(self.action_start_time)
+        # Drive back 0.30m
+        if dist >= 0.30 or elapsed > 8.0:
+            self.drive(0.0, 0.0)
+            self.transition_to(MissionState.RETURN)
+        else:
+            self.drive(-0.08, 0.0)
+
+    def handle_return(self):
+        if not self.state_initialized:
+            x = self.get_parameter('home_x').value
+            y = self.get_parameter('home_y').value
+            yaw = self.get_parameter('home_yaw').value
+            self.nav2_client.send_goal(x, y, yaw)
+            self.state_initialized = True
+
+        if self.nav2_client.goal_done:
+            if self.nav2_client.goal_success:
+                self.get_logger().info('Mission Complete!')
+            else:
+                self.get_logger().error('Failed to return home.')
+            self.transition_to(MissionState.IDLE)
 
     def drop_cargo(self):
         if self.carried_color and self.carried_color in self.cargo_pubs:
@@ -273,16 +460,54 @@ class MissionController(Node):
             t = self.tf_buffer.lookup_transform(
                 'map', tip_frame, rclpy.time.Time()
             )
+            x = t.transform.translation.x
+            y = t.transform.translation.y
+            if self.current_state == MissionState.LOAD_CARGO:
+                z = max(0.32, t.transform.translation.z + offset_z)
+            else:
+                z = t.transform.translation.z + offset_z
+            qx = t.transform.rotation.x
+            qy = t.transform.rotation.y
+            qz = t.transform.rotation.z
+            qw = t.transform.rotation.w
+
+            self.get_logger().info(
+                f'Teleporting cargo {color} to: x={x:.3f}, y={y:.3f}, z={z:.3f}'
+            )
+
+            # Call gz service asynchronously to teleport model, avoiding process accumulation
+            if self.teleport_process is None or self.teleport_process.poll() is not None:
+                import subprocess
+                cmd = [
+                    'gz', 'service', '-s', '/world/warehouse/set_pose',
+                    '--reqtype', 'gz.msgs.Pose',
+                    '--reptype', 'gz.msgs.Boolean',
+                    '--req', (
+                        f'name: "cargo_{color}_1", '
+                        f'position: {{x: {x}, y: {y}, z: {z}}}, '
+                        f'orientation: {{x: {qx}, y: {qy}, z: {qz}, w: {qw}}}'
+                    )
+                ]
+                self.teleport_process = subprocess.Popen(
+                    cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+                )
+
+            # Keep publishing to the ROS topic for compatibility
             msg = Pose()
-            msg.position.x = t.transform.translation.x
-            msg.position.y = t.transform.translation.y
-            msg.position.z = t.transform.translation.z + offset_z
-            msg.orientation = t.transform.rotation
+            msg.position.x = x
+            msg.position.y = y
+            msg.position.z = z
+            msg.orientation.x = qx
+            msg.orientation.y = qy
+            msg.orientation.z = qz
+            msg.orientation.w = qw
             self.cargo_pubs[color].publish(msg)
         except tf2_ros.LookupException as e:
-            self.get_logger().debug(f'TF lookup failed: {e}')
+            self.get_logger().warn(f'TF lookup failed: {e}')
         except tf2_ros.ExtrapolationException as e:
-            self.get_logger().debug(f'TF extrapolation failed: {e}')
+            self.get_logger().warn(f'TF extrapolation failed: {e}')
+        except Exception as e:
+            self.get_logger().error(f'Failed to set cargo pose: {e}')
 
     def send_fork_goal(self, position):
         move_time = float(self.get_parameter('fork_move_time').value)
@@ -326,20 +551,13 @@ class MissionController(Node):
         self.fork_goal_success = (status == 4)
         self.fork_goal_done = True
 
-    def handle_return(self):
-        if not self.state_initialized:
-            x = self.get_parameter('home_x').value
-            y = self.get_parameter('home_y').value
-            yaw = self.get_parameter('home_yaw').value
-            self.nav2_client.send_goal(x, y, yaw)
-            self.state_initialized = True
-
-        if self.nav2_client.goal_done:
-            if self.nav2_client.goal_success:
-                self.get_logger().info('Mission Complete!')
-            else:
-                self.get_logger().error('Failed to return home.')
-            self.transition_to(MissionState.IDLE)
+    def destroy_node(self):
+        if self.teleport_process and self.teleport_process.poll() is None:
+            try:
+                self.teleport_process.kill()
+            except Exception:
+                pass
+        super().destroy_node()
 
 
 def main(args=None):

@@ -4,7 +4,7 @@ from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, SetEnvironmentVariable
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration, TextSubstitution
+from launch.substitutions import LaunchConfiguration, PythonExpression, TextSubstitution
 from launch_ros.actions import Node
 from xacro import process_file
 
@@ -15,6 +15,7 @@ def generate_launch_description():
 
     world_file = os.path.join(pkg_gazebo, 'worlds', 'warehouse.sdf')
     world_path = LaunchConfiguration('world')
+    headless = LaunchConfiguration('headless')
 
     model_path = os.path.join(pkg_gazebo, 'models')
     gz_resource_path = os.environ.get('GZ_SIM_RESOURCE_PATH', '')
@@ -38,6 +39,11 @@ def generate_launch_description():
             default_value=world_file,
             description='Path to the Gazebo world file',
         ),
+        DeclareLaunchArgument(
+            'headless',
+            default_value='false',
+            description='Whether to run Gazebo in headless mode (server only)',
+        ),
         SetEnvironmentVariable('GZ_SIM_RESOURCE_PATH', gz_resource_path),
 
         IncludeLaunchDescription(
@@ -48,7 +54,13 @@ def generate_launch_description():
                     'gz_sim.launch.py',
                 )
             ),
-            launch_arguments={'gz_args': [TextSubstitution(text='-r '), world_path]}.items(),
+            launch_arguments={
+                'gz_args': [
+                    TextSubstitution(text='-r '),
+                    PythonExpression(["'-s ' if '", headless, "' == 'true' else ''"]),
+                    world_path
+                ]
+            }.items(),
         ),
 
         Node(

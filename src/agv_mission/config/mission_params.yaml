@@ -20,8 +20,8 @@ mission_controller:
     nav_timeout: 60.0
     fork_joint_name: base_to_fork_lift
     fork_tip_frame: fork_tip
-    fork_lift_up: 0.12
-    fork_lift_down: 0.0
+    fork_lift_up: 0.30
+    fork_lift_down: 0.06
     fork_travel_height: 0.04
     fork_move_time: 2.0
-    cargo_offset_z: 0.1
+    cargo_offset_z: 0.0
