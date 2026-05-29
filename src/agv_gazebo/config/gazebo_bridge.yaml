@@ -39,3 +39,39 @@
   ros_type_name: geometry_msgs/msg/Pose
   gz_type_name: gz.msgs.Pose
   direction: ROS_TO_GZ
+
+- ros_topic_name: /model/agv/attach_red
+  gz_topic_name: /model/agv/attach_red
+  ros_type_name: std_msgs/msg/Empty
+  gz_type_name: gz.msgs.Empty
+  direction: ROS_TO_GZ
+
+- ros_topic_name: /model/agv/detach_red
+  gz_topic_name: /model/agv/detach_red
+  ros_type_name: std_msgs/msg/Empty
+  gz_type_name: gz.msgs.Empty
+  direction: ROS_TO_GZ
+
+- ros_topic_name: /model/agv/attach_blue
+  gz_topic_name: /model/agv/attach_blue
+  ros_type_name: std_msgs/msg/Empty
+  gz_type_name: gz.msgs.Empty
+  direction: ROS_TO_GZ
+
+- ros_topic_name: /model/agv/detach_blue
+  gz_topic_name: /model/agv/detach_blue
+  ros_type_name: std_msgs/msg/Empty
+  gz_type_name: gz.msgs.Empty
+  direction: ROS_TO_GZ
+
+- ros_topic_name: /model/agv/attach_yellow
+  gz_topic_name: /model/agv/attach_yellow
+  ros_type_name: std_msgs/msg/Empty
+  gz_type_name: gz.msgs.Empty
+  direction: ROS_TO_GZ
+
+- ros_topic_name: /model/agv/detach_yellow
+  gz_topic_name: /model/agv/detach_yellow
+  ros_type_name: std_msgs/msg/Empty
+  gz_type_name: gz.msgs.Empty
+  direction: ROS_TO_GZ

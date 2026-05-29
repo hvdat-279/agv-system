@@ -58,6 +58,28 @@ class MissionController(Node):
                 Pose, '/model/cargo_yellow_1/cmd_pose', 10
             ),
         }
+        self.attach_pubs = {
+            'red': self.create_publisher(
+                Empty, '/model/agv/attach_red', 10
+            ),
+            'blue': self.create_publisher(
+                Empty, '/model/agv/attach_blue', 10
+            ),
+            'yellow': self.create_publisher(
+                Empty, '/model/agv/attach_yellow', 10
+            ),
+        }
+        self.detach_pubs = {
+            'red': self.create_publisher(
+                Empty, '/model/agv/detach_red', 10
+            ),
+            'blue': self.create_publisher(
+                Empty, '/model/agv/detach_blue', 10
+            ),
+            'yellow': self.create_publisher(
+                Empty, '/model/agv/detach_yellow', 10
+            ),
+        }
         self.carried_color = None
         self.teleport_process = None
 
@@ -156,9 +178,14 @@ class MissionController(Node):
             return None
 
     def run_fsm(self):
-        if self.carried_color and self.carried_color in self.cargo_pubs:
+        # Teleport cargo to follow the fork, but NOT during unload/retreat
+        # to avoid physics instability when dropping
+        if self.carried_color and self.current_state not in (
+            MissionState.UNLOAD_CARGO, MissionState.RETREAT_SORT
+        ):
             self.teleport_counter += 1
-            if self.teleport_counter % 3 == 0:
+            # Reduced frequency: every 5 ticks (~500ms) instead of every 2
+            if self.teleport_counter % 5 == 0:
                 self.publish_cargo_at_fork(self.carried_color)
 
         if self.current_state == MissionState.IDLE:
@@ -257,8 +284,8 @@ class MissionController(Node):
                 dist = ((x - self.x_start)**2 + (y - self.y_start)**2)**0.5
 
             elapsed = self._elapsed(self.action_start_time)
-            # Stop after 0.38 meters of travel or 8.0 seconds timeout
-            if dist >= 0.38 or elapsed > 8.0:
+            # Stop after 0.15 meters of travel or 8.0 seconds timeout
+            if dist >= 0.15 or elapsed > 8.0:
                 self.drive(0.0, 0.0)  # Stop
                 self.transition_to(MissionState.LOAD_CARGO)
             else:
@@ -277,7 +304,11 @@ class MissionController(Node):
         elif self.fork_step == 1:
             if self.fork_goal_done:
                 if self.fork_goal_success:
-                    self.get_logger().info('Loading complete!')
+                    self.get_logger().info('Loading complete! Attaching cargo.')
+                    # Teleport cargo to fork tip first
+                    self.publish_cargo_at_fork(self.carried_color)
+                    # Publish attach command to Gazebo DetachableJoint plugin
+                    self.attach_pubs[self.carried_color].publish(Empty())
                     self.transition_to(MissionState.RETREAT_PICKUP)
                 else:
                     self.get_logger().error('Fork lift failed. Aborting load.')
@@ -301,8 +332,8 @@ class MissionController(Node):
             dist = ((x - self.x_start)**2 + (y - self.y_start)**2)**0.5
 
         elapsed = self._elapsed(self.action_start_time)
-        # Drive back 0.42m or timeout
-        if dist >= 0.42 or elapsed > 8.0:
+        # Drive back 0.20m or timeout
+        if dist >= 0.20 or elapsed > 8.0:
             self.drive(0.0, 0.0)  # Stop
             # Lower the fork slightly to travel height for safety during transport
             self.send_fork_goal(self.get_parameter('fork_travel_height').value)
@@ -367,9 +398,12 @@ class MissionController(Node):
             dist = ((x - self.x_start)**2 + (y - self.y_start)**2)**0.5
 
         elapsed = self._elapsed(self.action_start_time)
-        # Drive forward 0.30m to overlap forks with the sorting table
-        if dist >= 0.30 or elapsed > 8.0:
+        # Drive forward 0.45m to overlap forks with the sorting table
+        if dist >= 0.45 or elapsed > 10.0:
             self.drive(0.0, 0.0)
+            # Publish stop multiple times to ensure diff_drive receives it
+            for _ in range(3):
+                self.drive(0.0, 0.0)
             self.transition_to(MissionState.UNLOAD_CARGO)
         else:
             self.drive(0.08, 0.0)
@@ -380,6 +414,9 @@ class MissionController(Node):
             self.state_initialized = True
             self.get_logger().info('Unloading cargo with forklift...')
 
+        # Keep sending stop command every tick to prevent drift
+        self.drive(0.0, 0.0)
+
         if self.fork_step == 0:
             if self.send_fork_goal(self.get_parameter('fork_lift_down').value):
                 self.fork_step = 1
@@ -389,9 +426,11 @@ class MissionController(Node):
                     self.get_logger().error('Fork lower failed. Aborting unload.')
                     self.transition_to(MissionState.IDLE)
                     return
-                # Detach the cargo physically in Gazebo
-                self.drop_cargo()
+                # Stop cargo tracking FIRST to prevent teleport interference
+                color_to_drop = self.carried_color
                 self.carried_color = None
+                # Detach the cargo physically in Gazebo (non-blocking)
+                self.drop_cargo(color_to_drop)
                 # Lift the forks slightly to clear the table
                 if self.send_fork_goal(self.get_parameter('fork_travel_height').value):
                     self.fork_step = 2
@@ -413,11 +452,11 @@ class MissionController(Node):
                 self.x_start, self.y_start, _ = pose
             else:
                 if self.detected_color == 'red':
-                    self.x_start, self.y_start = 2.3, 3.0
+                    self.x_start, self.y_start = 2.45, 3.0
                 elif self.detected_color == 'blue':
-                    self.x_start, self.y_start = -2.3, 3.0
+                    self.x_start, self.y_start = -2.45, 3.0
                 else:
-                    self.x_start, self.y_start = 0.0, -2.3
+                    self.x_start, self.y_start = 0.0, -2.45
             self.get_logger().info('Retreating from sorting station...')
 
         pose = self.get_robot_pose()
@@ -427,8 +466,8 @@ class MissionController(Node):
             dist = ((x - self.x_start)**2 + (y - self.y_start)**2)**0.5
 
         elapsed = self._elapsed(self.action_start_time)
-        # Drive back 0.30m
-        if dist >= 0.30 or elapsed > 8.0:
+        # Drive back 0.50m
+        if dist >= 0.50 or elapsed > 10.0:
             self.drive(0.0, 0.0)
             self.transition_to(MissionState.RETURN)
         else:
@@ -449,9 +488,41 @@ class MissionController(Node):
                 self.get_logger().error('Failed to return home.')
             self.transition_to(MissionState.IDLE)
 
-    def drop_cargo(self):
-        if self.carried_color and self.carried_color in self.cargo_pubs:
-            self.publish_cargo_at_fork(self.carried_color)
+    def drop_cargo(self, color=None):
+        if color is None:
+            color = self.carried_color
+        if color and color in self.cargo_pubs:
+            # 1. Publish detach command multiple times for reliability
+            for _ in range(3):
+                self.detach_pubs[color].publish(Empty())
+            self.get_logger().info(f'Detached cargo {color} from forks.')
+
+            # 2. Teleport cargo to the exact table surface (NON-BLOCKING)
+            # Poses of sorting tables: Red: 3.0, 3.0, 0.20 | Blue: -3.0, 3.0, 0.20
+            # Yellow: 0.0, -3.0, 0.20
+            if color == 'red':
+                tx, ty, tz = 3.0, 3.0, 0.20
+            elif color == 'blue':
+                tx, ty, tz = -3.0, 3.0, 0.20
+            else:
+                tx, ty, tz = 0.0, -3.0, 0.20
+
+            import subprocess
+            cmd = [
+                'gz', 'service', '-s', '/world/warehouse/set_pose',
+                '--reqtype', 'gz.msgs.Pose',
+                '--reptype', 'gz.msgs.Boolean',
+                '--req', (
+                    f'name: "cargo_{color}_1", '
+                    f'position: {{x: {tx}, y: {ty}, z: {tz}}}, '
+                    f'orientation: {{x: 0, y: 0, z: 0, w: 1}}'
+                )
+            ]
+            # Use Popen instead of run to avoid blocking the node
+            subprocess.Popen(
+                cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+            )
+            self.get_logger().info(f'Placed cargo {color} on sorting table.')
 
     def publish_cargo_at_fork(self, color):
         try:
@@ -462,10 +533,7 @@ class MissionController(Node):
             )
             x = t.transform.translation.x
             y = t.transform.translation.y
-            if self.current_state == MissionState.LOAD_CARGO:
-                z = max(0.32, t.transform.translation.z + offset_z)
-            else:
-                z = t.transform.translation.z + offset_z
+            z = t.transform.translation.z + offset_z
             qx = t.transform.rotation.x
             qy = t.transform.rotation.y
             qz = t.transform.rotation.z
@@ -475,7 +543,6 @@ class MissionController(Node):
                 f'Teleporting cargo {color} to: x={x:.3f}, y={y:.3f}, z={z:.3f}'
             )
 
-            # Call gz service asynchronously to teleport model, avoiding process accumulation
             if self.teleport_process is None or self.teleport_process.poll() is not None:
                 import subprocess
                 cmd = [
@@ -502,10 +569,6 @@ class MissionController(Node):
             msg.orientation.z = qz
             msg.orientation.w = qw
             self.cargo_pubs[color].publish(msg)
-        except tf2_ros.LookupException as e:
-            self.get_logger().warn(f'TF lookup failed: {e}')
-        except tf2_ros.ExtrapolationException as e:
-            self.get_logger().warn(f'TF extrapolation failed: {e}')
         except Exception as e:
             self.get_logger().error(f'Failed to set cargo pose: {e}')
 

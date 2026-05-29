@@ -5,8 +5,9 @@
         <link name="shelf_link">
             <pose>0 0 0 0 0 0</pose>
 
+            <!-- Legs (Wider spacing: y = +/- 0.35) -->
             <visual name="leg_fl">
-                <pose>0.45 0.15 0.5 0 0 0</pose>
+                <pose>0.45 0.35 0.5 0 0 0</pose>
                 <geometry>
                     <box>
                         <size>0.05 0.05 1.0</size>
@@ -18,7 +19,7 @@
                 </material>
             </visual>
             <collision name="leg_fl_collision">
-                <pose>0.45 0.15 0.5 0 0 0</pose>
+                <pose>0.45 0.35 0.5 0 0 0</pose>
                 <geometry>
                     <box>
                         <size>0.05 0.05 1.0</size>
@@ -27,7 +28,7 @@
             </collision>
 
             <visual name="leg_fr">
-                <pose>0.45 -0.15 0.5 0 0 0</pose>
+                <pose>0.45 -0.35 0.5 0 0 0</pose>
                 <geometry>
                     <box>
                         <size>0.05 0.05 1.0</size>
@@ -39,7 +40,7 @@
                 </material>
             </visual>
             <collision name="leg_fr_collision">
-                <pose>0.45 -0.15 0.5 0 0 0</pose>
+                <pose>0.45 -0.35 0.5 0 0 0</pose>
                 <geometry>
                     <box>
                         <size>0.05 0.05 1.0</size>
@@ -48,7 +49,7 @@
             </collision>
 
             <visual name="leg_rl">
-                <pose>-0.45 0.15 0.5 0 0 0</pose>
+                <pose>-0.45 0.35 0.5 0 0 0</pose>
                 <geometry>
                     <box>
                         <size>0.05 0.05 1.0</size>
@@ -60,7 +61,7 @@
                 </material>
             </visual>
             <collision name="leg_rl_collision">
-                <pose>-0.45 0.15 0.5 0 0 0</pose>
+                <pose>-0.45 0.35 0.5 0 0 0</pose>
                 <geometry>
                     <box>
                         <size>0.05 0.05 1.0</size>
@@ -69,7 +70,7 @@
             </collision>
 
             <visual name="leg_rr">
-                <pose>-0.45 -0.15 0.5 0 0 0</pose>
+                <pose>-0.45 -0.35 0.5 0 0 0</pose>
                 <geometry>
                     <box>
                         <size>0.05 0.05 1.0</size>
@@ -81,7 +82,7 @@
                 </material>
             </visual>
             <collision name="leg_rr_collision">
-                <pose>-0.45 -0.15 0.5 0 0 0</pose>
+                <pose>-0.45 -0.35 0.5 0 0 0</pose>
                 <geometry>
                     <box>
                         <size>0.05 0.05 1.0</size>
@@ -89,11 +90,13 @@
                 </geometry>
             </collision>
 
+            <!-- Shelves (Wider width: y size = 0.74 to span the legs) -->
+            <!-- Lowest shelf raised to z = 0.30 for robot base clearance -->
             <visual name="shelf_low">
-                <pose>0 0 0.2 0 0 0</pose>
+                <pose>0 0 0.30 0 0 0</pose>
                 <geometry>
                     <box>
-                        <size>1.0 0.4 0.04</size>
+                        <size>1.0 0.74 0.04</size>
                     </box>
                 </geometry>
                 <material>
@@ -102,19 +105,19 @@
                 </material>
             </visual>
             <collision name="shelf_low_collision">
-                <pose>0 0 0.2 0 0 0</pose>
+                <pose>0 0 0.30 0 0 0</pose>
                 <geometry>
                     <box>
-                        <size>1.0 0.4 0.04</size>
+                        <size>1.0 0.74 0.04</size>
                     </box>
                 </geometry>
             </collision>
 
             <visual name="shelf_mid">
-                <pose>0 0 0.55 0 0 0</pose>
+                <pose>0 0 0.60 0 0 0</pose>
                 <geometry>
                     <box>
-                        <size>1.0 0.4 0.04</size>
+                        <size>1.0 0.74 0.04</size>
                     </box>
                 </geometry>
                 <material>
@@ -123,19 +126,19 @@
                 </material>
             </visual>
             <collision name="shelf_mid_collision">
-                <pose>0 0 0.55 0 0 0</pose>
+                <pose>0 0 0.60 0 0 0</pose>
                 <geometry>
                     <box>
-                        <size>1.0 0.4 0.04</size>
+                        <size>1.0 0.74 0.04</size>
                     </box>
                 </geometry>
             </collision>
 
             <visual name="shelf_top">
-                <pose>0 0 0.9 0 0 0</pose>
+                <pose>0 0 0.90 0 0 0</pose>
                 <geometry>
                     <box>
-                        <size>1.0 0.4 0.04</size>
+                        <size>1.0 0.74 0.04</size>
                     </box>
                 </geometry>
                 <material>
@@ -144,10 +147,10 @@
                 </material>
             </visual>
             <collision name="shelf_top_collision">
-                <pose>0 0 0.9 0 0 0</pose>
+                <pose>0 0 0.90 0 0 0</pose>
                 <geometry>
                     <box>
-                        <size>1.0 0.4 0.04</size>
+                        <size>1.0 0.74 0.04</size>
                     </box>
                 </geometry>
             </collision>

@@ -51,7 +51,7 @@ bt_navigator:
     robot_base_frame: base_link
     odom_topic: /odometry/filtered
     bt_loop_duration: 10
-    default_server_timeout: 20
+    default_server_timeout: 2000
 
 controller_server:
   ros__parameters:
@@ -75,8 +75,8 @@ controller_server:
     general_goal_checker:
       stateful: true
       plugin: nav2_controller::SimpleGoalChecker
-      xy_goal_tolerance: 0.08
-      yaw_goal_tolerance: 0.08
+      xy_goal_tolerance: 0.20
+      yaw_goal_tolerance: 0.15
 
     FollowPath:
       plugin: dwb_core::DWBLocalPlanner
@@ -102,7 +102,7 @@ controller_server:
       linear_granularity: 0.05
       angular_granularity: 0.025
       transform_tolerance: 0.2
-      xy_goal_tolerance: 0.08
+      xy_goal_tolerance: 0.20
       trans_stopped_velocity: 0.05
       short_circuit_trajectory_evaluation: true
       stateful: true

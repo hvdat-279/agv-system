@@ -139,23 +139,7 @@ Visualization Manager:
       Show Names: true
       Tree:
         map:
-          odom:
-            base_link:
-              camera_link:
-                agv/base_link/camera:
-                  {}
-              fork_link:
-                fork_tip:
-                  {}
-              left_wheel:
-                {}
-              lidar_link:
-                agv/base_link/lidar:
-                  {}
-              mast_link:
-                {}
-              right_wheel:
-                {}
+          {}
       Update Interval: 0
       Value: true
     - Alpha: 1

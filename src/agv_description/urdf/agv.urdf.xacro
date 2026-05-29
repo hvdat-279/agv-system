@@ -68,12 +68,6 @@
             <origin rpy="0 0 0" xyz="0.17 -0.08 0.01"/>
             <material name="black"/>
         </visual>
-        <collision>
-            <geometry>
-                <box size="0.35 0.2 0.02"/>
-            </geometry>
-            <origin rpy="0 0 0" xyz="0.17 0 0.01"/>
-        </collision>
         <inertial>
             <mass value="2.0"/>
             <inertia ixx="0.01" ixy="0" ixz="0" iyy="0.01" iyz="0" izz="0.01"/>
@@ -124,4 +118,29 @@
         <child link="camera_link"/>
         <origin xyz="0.28 0 0.40" rpy="0 0 0"/>
     </joint>
+
+    <!-- Gazebo DetachableJoint plugins for picking up cargo -->
+    <gazebo>
+        <plugin filename="gz-sim-detachable-joint-system" name="gz::sim::systems::DetachableJoint">
+            <parent_link>fork_link</parent_link>
+            <child_model>cargo_red_1</child_model>
+            <child_model_link>link</child_model_link>
+            <detach_topic>/model/agv/detach_red</detach_topic>
+            <attach_topic>/model/agv/attach_red</attach_topic>
+        </plugin>
+        <plugin filename="gz-sim-detachable-joint-system" name="gz::sim::systems::DetachableJoint">
+            <parent_link>fork_link</parent_link>
+            <child_model>cargo_blue_1</child_model>
+            <child_model_link>link</child_model_link>
+            <detach_topic>/model/agv/detach_blue</detach_topic>
+            <attach_topic>/model/agv/attach_blue</attach_topic>
+        </plugin>
+        <plugin filename="gz-sim-detachable-joint-system" name="gz::sim::systems::DetachableJoint">
+            <parent_link>fork_link</parent_link>
+            <child_model>cargo_yellow_1</child_model>
+            <child_model_link>link</child_model_link>
+            <detach_topic>/model/agv/detach_yellow</detach_topic>
+            <attach_topic>/model/agv/attach_yellow</attach_topic>
+        </plugin>
+    </gazebo>
 </robot>
