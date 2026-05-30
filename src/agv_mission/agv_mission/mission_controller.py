@@ -392,14 +392,27 @@ class MissionController(Node):
             self.get_logger().info('Approaching sorting station...')
 
         pose = self.get_robot_pose()
-        dist = 0.0
+        should_stop = False
         if pose is not None:
             x, y, _ = pose
+            if self.detected_color == 'red':
+                if x >= 2.30:
+                    should_stop = True
+            elif self.detected_color == 'blue':
+                if x <= -2.30:
+                    should_stop = True
+            else: # yellow
+                if y <= -2.30:
+                    should_stop = True
+
+        dist = 0.0
+        if pose is not None:
             dist = ((x - self.x_start)**2 + (y - self.y_start)**2)**0.5
 
         elapsed = self._elapsed(self.action_start_time)
-        # Drive forward 0.45m to overlap forks with the sorting table
-        if dist >= 0.45 or elapsed > 10.0:
+        # Drive forward to a safe absolute pose (10cm away from table) to overlap forks,
+        # but stop if we exceed distance/time to prevent infinite driving
+        if should_stop or dist >= 0.50 or elapsed > 10.0:
             self.drive(0.0, 0.0)
             # Publish stop multiple times to ensure diff_drive receives it
             for _ in range(3):
@@ -452,23 +465,38 @@ class MissionController(Node):
                 self.x_start, self.y_start, _ = pose
             else:
                 if self.detected_color == 'red':
-                    self.x_start, self.y_start = 2.45, 3.0
+                    self.x_start, self.y_start = 2.30, 3.0
                 elif self.detected_color == 'blue':
-                    self.x_start, self.y_start = -2.45, 3.0
+                    self.x_start, self.y_start = -2.30, 3.0
                 else:
-                    self.x_start, self.y_start = 0.0, -2.45
+                    self.x_start, self.y_start = 0.0, -2.30
             self.get_logger().info('Retreating from sorting station...')
 
         pose = self.get_robot_pose()
-        dist = 0.0
+        should_stop = False
         if pose is not None:
             x, y, _ = pose
+            if self.detected_color == 'red':
+                if x <= 1.85:
+                    should_stop = True
+            elif self.detected_color == 'blue':
+                if x >= -1.85:
+                    should_stop = True
+            else: # yellow
+                if y >= -1.85:
+                    should_stop = True
+
+        dist = 0.0
+        if pose is not None:
             dist = ((x - self.x_start)**2 + (y - self.y_start)**2)**0.5
 
         elapsed = self._elapsed(self.action_start_time)
-        # Drive back 0.50m
-        if dist >= 0.50 or elapsed > 10.0:
+        # Drive back to a safe absolute pose (well away from the table),
+        # or stop if we exceed distance/time to prevent infinite driving
+        if should_stop or dist >= 0.60 or elapsed > 10.0:
             self.drive(0.0, 0.0)
+            for _ in range(3):
+                self.drive(0.0, 0.0)
             self.transition_to(MissionState.RETURN)
         else:
             self.drive(-0.08, 0.0)
